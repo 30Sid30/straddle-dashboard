@@ -1,0 +1,23 @@
+# Downloaded market data — generated at runtime, never committed
+Data/
+NIFTY/
+SENSEX/
+
+# Generated output
+straddle_dashboard.html
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets — should live in GitHub Secrets only, never on disk
+.env
+credentials.env
