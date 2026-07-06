@@ -56,14 +56,24 @@ jobs:
           GROWW_TOTP_SECRET: ${{ secrets.GROWW_TOTP_SECRET }}
         run: python download_spot.py
 
-      # ── 5. Generate dashboard HTML ───────────────────────────────────────────
+      # ── 5. Pre-download all 0DTE contracts ──────────────────────────────────
+      # Downloads ATM ± 15 strikes for all 90 expiries so straddle_dashboard.py
+      # reads from disk rather than making inline API calls — much faster HTML
+      # generation. Cached between runs so only the new expiry is fetched.
+      - name: Pre-download 0DTE contracts
+        env:
+          GROWW_API_KEY: ${{ secrets.GROWW_API_KEY }}
+          GROWW_TOTP_SECRET: ${{ secrets.GROWW_TOTP_SECRET }}
+        run: python download_0dte.py
+
+      # ── 6. Generate dashboard HTML ───────────────────────────────────────────
       - name: Generate straddle_dashboard.html
         env:
           GROWW_API_KEY: ${{ secrets.GROWW_API_KEY }}
           GROWW_TOTP_SECRET: ${{ secrets.GROWW_TOTP_SECRET }}
         run: python straddle_dashboard.py
 
-      # ── 6. Verify output ─────────────────────────────────────────────────────
+      # ── 7. Verify output ─────────────────────────────────────────────────────
       - name: Verify HTML was generated
         run: |
           if [ ! -f straddle_dashboard.html ]; then

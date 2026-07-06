@@ -13,6 +13,20 @@ Versioning follows [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.P
 
 ---
 
+## [1.2.0] — 2026-07-06
+
+### Fixed
+- SENSEX expiries with illiquid ATM strikes now fall back to the nearest
+  liquid adjacent strike (±1, ±2, ±3 × interval) instead of showing
+  "No contract data" error
+
+### Changed
+- Workflow now runs `download_0dte.py` before `straddle_dashboard.py`,
+  pre-fetching all ATM ± 15 contracts for all 90 expiries. Dashboard HTML
+  generation reads from disk entirely — no inline API calls, faster output.
+
+---
+
 ## [1.1.0] — 2026-07-06
 
 ### Changed

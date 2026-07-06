@@ -485,39 +485,56 @@ def compute_movements(spot_df: Optional[pd.DataFrame], expiry: date,
     }
 
 
+def _is_empty_csv(fp: Path) -> bool:
+    """True if the file exists but contains no data rows (header-only marker)."""
+    try:
+        return pd.read_csv(fp).empty
+    except Exception:
+        return True
+
+
 def compute_checkpoint_cell(cfg: dict, expiry: date, atm: Optional[int],
                              t: dtime, spot_df: Optional[pd.DataFrame] = None,
                              ref_price: Optional[float] = None) -> dict:
     if atm is None:
         return _error_cell("No spot data")
 
-    ce_fp = contract_path(cfg, expiry, atm, "CE")
-    pe_fp = contract_path(cfg, expiry, atm, "PE")
+    interval = cfg["interval"]
 
-    if not ce_fp.exists() or not pe_fp.exists():
+    # If the exact ATM files are missing, trigger download (pending)
+    ce_fp0 = contract_path(cfg, expiry, atm, "CE")
+    pe_fp0 = contract_path(cfg, expiry, atm, "PE")
+    if not ce_fp0.exists() or not pe_fp0.exists():
         return _pending_cell(atm)
 
-    def is_empty(fp):
-        try:
-            return pd.read_csv(fp).empty
-        except Exception:
-            return True
+    # Try ATM first, then adjacent strikes if ATM has zero candles.
+    # Empty CSVs mean that specific strike had no trades on expiry day —
+    # common for less-liquid SENSEX expiries. Walk outward up to ±3 strikes.
+    for delta in [0, -1, 1, -2, 2, -3, 3]:
+        strike = atm + delta * interval
+        ce_fp  = contract_path(cfg, expiry, strike, "CE")
+        pe_fp  = contract_path(cfg, expiry, strike, "PE")
 
-    if is_empty(ce_fp) or is_empty(pe_fp):
-        return _error_cell(f"No contract data (ATM {atm})", atm)
+        # Only consider strikes already downloaded on both sides
+        if not ce_fp.exists() or not pe_fp.exists():
+            continue
+        if _is_empty_csv(ce_fp) or _is_empty_csv(pe_fp):
+            continue
 
-    ce_price = read_close_at(ce_fp, expiry, t)
-    pe_price = read_close_at(pe_fp, expiry, t)
+        ce_price = read_close_at(ce_fp, expiry, t)
+        pe_price = read_close_at(pe_fp, expiry, t)
+        if ce_price is None or pe_price is None:
+            continue
 
-    if ce_price is None or pe_price is None:
-        which = "CE" if ce_price is None else "PE"
-        return _error_cell(f"No {which} candle at {t.strftime('%H:%M')}", atm)
+        premium = round(ce_price + pe_price, 2)
+        cell = {"premium": premium, "atm": strike, "error": None,
+                "pending": False, **_MOVE_NONE}
+        if ref_price is not None:
+            cell.update(compute_movements(spot_df, expiry, t, ref_price))
+        return cell
 
-    premium = round(ce_price + pe_price, 2)
-    cell = {"premium": premium, "atm": atm, "error": None, "pending": False, **_MOVE_NONE}
-    if ref_price is not None:
-        cell.update(compute_movements(spot_df, expiry, t, ref_price))
-    return cell
+    # No liquid strike found within ±3 of ATM
+    return _error_cell(f"No liquid data near ATM {atm}", atm)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
