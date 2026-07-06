@@ -48,7 +48,7 @@ TOTP_SECRET = os.environ["GROWW_TOTP_SECRET"]
 # ── Config ────────────────────────────────────────────────────────────────────
 BASE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 
-N_EXPIRIES            = 10    # past expiries to download per index
+N_EXPIRIES            = 90    # past expiries to download per index
 ATM_STRIKE_RANGE      = 15    # strikes on each side of ATM
 MAX_WORKERS           = 8     # parallel download threads
 MARKET_CLOSE_HOUR     = 21    # download today's expiry only after 9 PM
@@ -182,7 +182,7 @@ def _api_fetch_expiries(exchange: str, underlying: str) -> list[str]:
 
     # 12 months back (inclusive of current month)
     y, m = today.year, today.month
-    for _ in range(13):
+    for _ in range(25):    # 24 months back + current → covers Jan 2025 from Jul 2026
         months.append((y, m))
         m -= 1
         if m == 0:

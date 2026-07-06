@@ -32,7 +32,7 @@ TOTP_SECRET = os.environ["GROWW_TOTP_SECRET"]
 # ── Config ────────────────────────────────────────────────────────────────────
 BASE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 
-N_EXPIRIES             = 10
+N_EXPIRIES             = 90
 NIFTY_STRIKE_INTERVAL  = 50
 SENSEX_STRIKE_INTERVAL = 100
 CHECKPOINTS         = [dtime(9, 16), dtime(10, 0)]
@@ -172,7 +172,7 @@ def _api_fetch_expiries(exchange: str, underlying: str) -> list[str]:
     today = date.today()
     months: list[tuple[int, int]] = []
     y, m = today.year, today.month
-    for _ in range(13):
+    for _ in range(25):    # 24 months back + current → covers Jan 2025 from Jul 2026
         months.append((y, m))
         m -= 1
         if m == 0:

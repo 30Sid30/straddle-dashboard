@@ -13,6 +13,20 @@ Versioning follows [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.P
 
 ---
 
+## [1.1.0] — 2026-07-06
+
+### Changed
+- `N_EXPIRIES` increased from 10 → 90, covering all NIFTY and SENSEX expiries  
+  from Jan 2025 to present (79 NIFTY + 83 SENSEX past expiries)
+- Expiry cache lookback extended from 12 → 24 months so Jan–May 2025 expiries  
+  are included in the calendar (previously the 12-month window missed them)
+
+### Notes
+- The dashboard UI filter (5 / 10 / 15 / Custom) still controls how many rows  
+  are displayed — 90 is the maximum available, default view remains 10
+
+---
+
 ## [1.0.0] — 2026-07-06
 
 ### Added
