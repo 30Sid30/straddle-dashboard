@@ -1,4 +1,0 @@
-growwapi
-pyotp
-numpy
-pandas
