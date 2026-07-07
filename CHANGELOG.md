@@ -13,6 +13,18 @@ Versioning follows [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.P
 
 ---
 
+## [1.3.0] — 2026-07-07
+
+### Fixed
+- `download_0dte.py`: stale-file bug where a contract file downloaded before
+  expiry (by `download_data.py`) would be skipped even though it contained no
+  expiry-day candles. Skip logic now checks `_has_expiry_day_data()` — only
+  skips if the file already contains at least one candle on the expiry date.
+  Previously, NIFTY Jun 30 PE files (data: Apr-Jun 12) were blocking the
+  correct expiry-day download indefinitely.
+
+---
+
 ## [1.2.0] — 2026-07-06
 
 ### Fixed

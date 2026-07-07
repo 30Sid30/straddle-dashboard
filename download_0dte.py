@@ -304,14 +304,32 @@ def _save_csv(fp: Path, candles: list) -> int:
 
 
 # ── Contract download ─────────────────────────────────────────────────────────
+def _has_expiry_day_data(fp: Path, expiry_date: date) -> bool:
+    """
+    True if the CSV already contains at least one candle on the expiry date.
+    A file can exist but have NO expiry-day data when download_data.py fetched
+    the full contract history before the expiry occurred — the file is then stale
+    and must be re-downloaded for 0DTE purposes.
+    """
+    try:
+        import pandas as pd
+        df = pd.read_csv(fp, parse_dates=["timestamp"])
+        return any(df["timestamp"].dt.date == expiry_date)
+    except Exception:
+        return False
+
+
 def _download_contract(exchange: str, groww_symbol: str,
                        expiry_date: date, out_dir: Path) -> str:
     """
     Download one contract for the expiry day only (09:15–15:30).
     Returns a human-readable status string.
+
+    Skip logic: only skip if the file exists AND already contains expiry-day
+    candles. A file with pre-expiry-only data is stale and re-downloaded.
     """
     fp = out_dir / f"{groww_symbol}.csv"
-    if fp.exists():
+    if fp.exists() and _has_expiry_day_data(fp, expiry_date):
         return f"skip (exists): {groww_symbol}"
 
     s_str = f"{expiry_date} 09:15:00"
