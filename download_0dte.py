@@ -322,18 +322,24 @@ def _has_expiry_day_data(fp: Path, expiry_date: date) -> bool:
 def _download_contract(exchange: str, groww_symbol: str,
                        expiry_date: date, out_dir: Path) -> str:
     """
-    Download one contract for the expiry day only (09:15–15:30).
+    Download one contract covering the expiry day.
     Returns a human-readable status string.
 
     Skip logic: only skip if the file exists AND already contains expiry-day
     candles. A file with pre-expiry-only data is stale and re-downloaded.
+
+    Window: 7-day bracket (expiry_date - 3 → expiry_date + 3) instead of
+    exactly 1 day. The Groww API returns empty for some single-day requests
+    but reliably returns data inside a broader window — same behaviour as the
+    30-day chunks used by download_data.py. We filter to expiry-day rows when
+    reading, so the extra surrounding days add no dashboard overhead.
     """
     fp = out_dir / f"{groww_symbol}.csv"
     if fp.exists() and _has_expiry_day_data(fp, expiry_date):
         return f"skip (exists): {groww_symbol}"
 
-    s_str = f"{expiry_date} 09:15:00"
-    e_str = f"{expiry_date} 15:30:00"
+    s_str = f"{expiry_date - timedelta(days=3)} 09:15:00"
+    e_str = f"{expiry_date + timedelta(days=3)} 15:30:00"
     try:
         resp = call_api(
             get_groww().get_historical_candles,
