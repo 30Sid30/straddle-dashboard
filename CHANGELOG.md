@@ -11,6 +11,20 @@ Versioning follows [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.P
 
 ## [Unreleased]
 
+### Planned
+- `straddle_dashboard.py`: trigger download for **0DTE and 1DTE options data**
+  so that today's and tomorrow's expiry contracts are always pre-fetched
+  (currently only past expiries are downloaded automatically)
+
+---
+
+## [1.4.0] — 2026-07-14
+
+### Changed
+- `MARKET_CLOSE_HOUR`: 21 → 16 — today's expiry is now included in the
+  dashboard after 4 PM IST (market close at 3:30 PM + 30 min buffer)
+  instead of waiting until 9 PM
+
 ---
 
 ## [1.3.0] — 2026-07-07

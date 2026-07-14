@@ -36,7 +36,7 @@ N_EXPIRIES             = 90
 NIFTY_STRIKE_INTERVAL  = 50
 SENSEX_STRIKE_INTERVAL = 100
 CHECKPOINTS         = [dtime(9, 16), dtime(10, 0)]
-MARKET_CLOSE_HOUR      = 21
+MARKET_CLOSE_HOUR      = 16   # show today's expiry once market closes (3:30 PM + buffer)
 MAX_WORKERS            = 8
 HTML_REFRESH_SECS      = 20
 TOKEN_REFRESH_SECS     = 6 * 3600
@@ -553,13 +553,51 @@ def load_spark_data(spot_df: Optional[pd.DataFrame],
 
 def classify_day(c916: dict) -> tuple[str, str]:
     """Trending / Volatile / Consolidating based on 9:16 AM metrics."""
-    o2h = c916.get("open_to_high")
-    o2l = c916.get("open_to_low")
-    h2l = c916.get("high_to_low")
+    o2h      = c916.get("open_to_high")
+    o2l      = c916.get("open_to_low")
+    h2l      = c916.get("high_to_low")
     straddle = c916.get("premium")
+    err      = c916.get("error")
 
-    if any(v is None for v in [o2h, o2l, h2l, straddle]) or straddle == 0:
-        return "—", "Insufficient data"
+    # ── Case 1: no straddle premium at all ────────────────────────────────────
+    if straddle is None:
+        if err == "No spot data":
+            return "—", (
+                "No spot data — NIFTY_SPOT.csv / SENSEX_SPOT.csv does not have "
+                "a candle for this expiry date. Fix: run download_spot.py to fetch "
+                "missing intraday spot data, then re-run the dashboard."
+            )
+        if err and "No liquid data" in err:
+            atm_hint = err.split("ATM")[-1].strip() if "ATM" in err else ""
+            return "—", (
+                f"No options data near ATM {atm_hint} — contract CSV files for "
+                "this expiry are missing from the NIFTY/ or SENSEX/ folder. "
+                "Fix: run download_data.py to download the full contract chain, "
+                "then re-run the dashboard."
+            )
+        if err:
+            return "—", f"Data error: {err}"
+        return "—", (
+            "Straddle premium is None — contract files may be missing or empty. "
+            "Fix: check the expiry folder under NIFTY/ or SENSEX/, delete any "
+            "header-only CSV files, and re-run download_data.py."
+        )
+
+    # ── Case 2: premium present but movement metrics missing ──────────────────
+    if any(v is None for v in [o2h, o2l, h2l]):
+        return "—", (
+            f"Straddle ₹{straddle:.2f} found but movement metrics (↑/↓/↔) are "
+            "missing — this usually means a contract was downloaded mid-run so "
+            "the spot reference price was not captured in that pass. "
+            "Fix: re-run straddle_dashboard.py (no data changes needed)."
+        )
+
+    # ── Case 3: data quality issue ────────────────────────────────────────────
+    if straddle == 0:
+        return "—", (
+            "Straddle premium is ₹0 — data quality issue. "
+            "Check the ATM contract CSV files for this expiry date."
+        )
 
     range_mult     = h2l / straddle
     larger         = max(o2h, o2l)
@@ -567,22 +605,51 @@ def classify_day(c916: dict) -> tuple[str, str]:
     direction_bias = larger / smaller if smaller > 0 else 99.0
     direction      = "up" if o2h >= o2l else "down"
 
+    # Retention check — two separate thresholds depending on whether the market
+    # crossed back through the 9:16 open during the day:
+    #
+    #   Market stayed above open  (H2L < dominant, O2L ≤ 0):
+    #     H2L/dominant < 0.75 required — must have retained ≥ 25% of the
+    #     directional move at all times. Catches "went up 560, gave back 500
+    #     without touching open" as Volatile.
+    #
+    #   Market dipped below open  (H2L ≥ dominant, O2L > 0):
+    #     H2L/dominant < 1.25 required — allows a dip up to 25% of the
+    #     dominant move below the open on an otherwise directional day.
+    #     Catches today's full reversals while keeping "went up 845, briefly
+    #     touched 28 below open" as Trending.
+    h2l_ratio      = h2l / larger if larger > 0 else 0.0
+    threshold      = 1.25 if h2l_ratio >= 1.0 else 0.75
+    retention_ok   = h2l_ratio < threshold
+
     if range_mult < 0.8:
         return (
             "Consolidating",
             f"Range of {h2l:.0f} pts ({range_mult:.2f}x straddle) — "
             f"index stayed within straddle bounds all day"
         )
-    if direction_bias >= 2.5 and range_mult >= 1.0:
+    if direction_bias >= 2.5 and range_mult >= 1.0 and retention_ok:
+        retained_pct = (1 - h2l_ratio) * 100
         return (
             "Trending",
             f"Strong {direction}trend — ↑ {o2h:.0f} vs ↓ {o2l:.0f} pts; "
             f"total range {range_mult:.2f}x straddle with {direction_bias:.1f}:1 directional bias"
+            + (f"; retained {retained_pct:.0f}% of move" if retained_pct > 0 else "")
         )
+    # Explain why Trending was rejected when retention was the deciding factor
+    if not retention_ok:
+        if h2l_ratio >= 1.0:
+            reversal_note = (f"; reversed {o2l:.0f} pts below 9:16 open "
+                             f"({o2l/larger*100:.0f}% of {direction}side move)")
+        else:
+            reversal_note = (f"; {h2l_ratio*100:.0f}% of {direction}side move "
+                             f"given back from high (threshold: 75%)")
+    else:
+        reversal_note = ""
     return (
         "Volatile",
         f"Range of {h2l:.0f} pts ({range_mult:.2f}x straddle) "
-        f"with roughly equal up/down swings — ↑ {o2h:.0f} vs ↓ {o2l:.0f} pts"
+        f"↑ {o2h:.0f} vs ↓ {o2l:.0f} pts{reversal_note}"
     )
 
 
