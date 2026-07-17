@@ -1315,10 +1315,23 @@ def main() -> None:
                 )
                 row[key] = _error_cell(f"Download failed ({details})", atm)
             else:
+                # Re-derive ref_price from the spot CSV so movements are
+                # computed correctly. The first pass stored ref_price inside
+                # spots_map but that dict is local to collect_all_rows;
+                # re-reading from the loaded spot_df is the clean equivalent.
+                spot_df = spot_dfs[row["index"]]
+                t = CHECKPOINTS[j]
+                recompute_ref: Optional[float] = None
+                if spot_df is not None:
+                    day_s = spot_df[spot_df["timestamp"].dt.date == expiry]
+                    rrow  = day_s[day_s["timestamp"] >= datetime.combine(expiry, t)]
+                    if not rrow.empty:
+                        recompute_ref = float(rrow.iloc[0]["close"])
+
                 row[key] = compute_checkpoint_cell(
                     cfg, expiry, atm, CHECKPOINTS[j],
-                    spot_df=spot_dfs[row["index"]],
-                    ref_price=None,
+                    spot_df=spot_df,
+                    ref_price=recompute_ref,
                 )
         # Re-classify after recompute
         row["day_type"], row["day_reason"] = classify_day(row[chk_keys[0]])
